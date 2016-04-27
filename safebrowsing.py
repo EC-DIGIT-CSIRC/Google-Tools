@@ -7,9 +7,8 @@
 # TODO:
 #    - Improve/review proxy support
 #    - Improved output support
-#    - Support for more than 500 URLs at once
 #
-# Version 0.1 
+# Version 0.2
 #
 import urllib
 import urllib2
@@ -21,7 +20,7 @@ import sys
 # Variables and settings
 gsbapi = ""
 gsbclientn = "AUTOPSIT"
-gsbclientv = "0.1"
+gsbclientv = "0.2"
 gsbversion = "3.1"  # see https://developers.google.com/safe-browsing/lookup_guide#AQuickExamplePOSTMethod
 gsburl = "https://sb-ssl.google.com/safebrowsing/api/lookup?client=%s&key=%s&appver=%s&pver=%s"
 directory = "./out"
@@ -47,40 +46,45 @@ def getHuntingResult(urls=[]):
         urllib2.install_opener(opener)
 
     results = ""
-    if(len(urls) > 500):
-            print("ERROR: MAX 500 URLS at each time -- TO BE FIXED")
-    else:
+    lastcode = 204
+    iteration = 0
+
+    for i in range(0, len(urls) / 500 + 1):
+
+        subset = urls[500*i:(500*(i+1))-1]
+
         try:
-            query = str(len(urls))
-            for url in urls:
+            query = str(len(subset))
+            for url in subset:
                query += "\n" + urllib.quote(url)
             url = gsburl % (gsbclientn, gsbapi, gsbclientv, gsbversion)
             req = urllib2.Request(url, query)
             response = urllib2.urlopen(req)
             code = response.getcode()
-            results = response.read()
+            results += response.read()
             response.close()
 
             # Handle results
             if(code == 204):
-                print "All URLs are clean"
+                continue  #this is the default code
             elif(code == 200):
-                print "AT LEAST ONE of the queried URLs are matched"
+                lastcode = 200
+                print "AT LEAST ONE of the queried URLs are matched in this subset.\nCurrent result:\n%s" % results
             else:
-                print "Other error: %s" % code
-            return results
+                lastcode = code
         except:
             print "ERROR: Failed to retrieve results from Google Safe Browsing :'("
             print sys.exc_info()[0]
             return None
-    return results
 
-def outputResults(results, outfile=sys.stdout):
-    LDwriter = csv.writer(outfile)
-    LDwriter.writerow(["# of detection", "YARA rule", "SHA1", "Binary type", "First seen", "Last seen"])
-    if results is not None:
-        for row in results:
-            LDwriter.writerow(row)
+    # Handle final results
+    if(lastcode == 204):
+        print "All URLs are clean"
+    elif(lastcode == 200):
+        print "AT LEAST ONE of the queried URLs are matched"
+    else:
+        print "At least one of the step failed with code: %s" % lastcode
+    return results
 
 def main():
     """
@@ -102,7 +106,7 @@ def main():
     parser.add_argument('-in', '--input', help='File with the list of domains URLs to search')
 
     # Output options
-    parser.add_argument('-out', '--output', help='File to store result (by default stdout')
+    parser.add_argument('-out', '--output', help='File to store result (by default stdout) -- CURRENTLY NOT IMPLEMENTED')
 
     # Parse command line
     args = parser.parse_args()
@@ -151,8 +155,7 @@ def main():
 
     # Do all the magic now :)
     results = getHuntingResult(urls)
-    print results #DEBUG -- TODO fix it
-    #outputResults(results, outfile)
+    print results #DEBUG -- TODO improve
 
 # Call the main function of this script and trigger all the magic \o/
 if __name__ == "__main__":
