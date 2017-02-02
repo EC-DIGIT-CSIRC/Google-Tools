@@ -8,7 +8,10 @@
 #    - Improve/review proxy support
 #    - Improved output support
 #
-# Version 0.2
+# Version 0.3
+#
+# Changes
+#    - Add functions to create Opener object and bug fix (2017-02-02)
 #
 import urllib
 import urllib2
@@ -25,25 +28,25 @@ gsbversion = "3.1"  # see https://developers.google.com/safe-browsing/lookup_gui
 gsburl = "https://sb-ssl.google.com/safebrowsing/api/lookup?client=%s&key=%s&appver=%s&pver=%s"
 directory = "./out"
 
-# Proxy settings
-proxy_uri = None
-proxy_usr = None
-proxy_pwd = None
-
 # Output information
 outfile = sys.stdout
 
-def getHuntingResult(urls=[]):
+def getHuntingResult(urls=[], proxy=None):
+    """
+        Query Google Safe Browsing through API.
+
+        Google Safe Browsing is queried for all urls
+        stored in urls array.
+
+        If a proxy is required, proxy parameter
+        received a Opener object set with right
+        proxy parameter.  The Opener object is returned
+        by function getOpenerWithProxy() or getOpenerWithProxyFromString()
+    """
     # Some funcky thinks
     # Create an OpenerDirector with support for Basic HTTP Authentication...
-    if(proxy_uri is not None):
-        proxy = None
-        if(proxy_usr is not None and proxy_pwd is not None):
-            proxy = urllib2.ProxyHandler({'https' : 'http://%s:%s@%s' % (proxy_usr, proxy_pwd, proxy_uri)})
-        else:
-            proxy = urllib2.ProxyHandler({'https' : 'http://%s' % (proxy_uri)})
-        opener = urllib2.build_opener(proxy)
-        urllib2.install_opener(opener)
+    if proxy is not None:
+        urllib2.install_opener(proxy)
 
     results = ""
     lastcode = 204
@@ -72,9 +75,10 @@ def getHuntingResult(urls=[]):
                 print "AT LEAST ONE of the queried URLs are matched in this subset.\nCurrent result:\n%s" % results
             else:
                 lastcode = code
-        except:
+        except Exception as e:
             print "ERROR: Failed to retrieve results from Google Safe Browsing :'("
-            print sys.exc_info()[0]
+            print (e)
+            #print sys.exc_info()[0]
             return None
 
     # Handle final results
@@ -85,6 +89,44 @@ def getHuntingResult(urls=[]):
     else:
         print "At least one of the step failed with code: %s" % lastcode
     return results
+
+
+def getOpenerWithProxy(proxy_addr, proxy_usr = None, proxy_pwd = None):
+    """
+        Return a Opener object based on 3 parameters:
+
+        - proxy_addr with format <host>:<port> which defined the Proxy address and port
+        - proxy_usr which is the proxy user if required or None
+        - proxy_pwd which is the porxy password if required or None
+    """
+    try:
+        proxy = None
+        if(proxy_usr is not None and proxy_pwd is not None):
+            proxy = urllib2.ProxyHandler({'https' : 'http://%s:%s@%s' % (proxy_usr, proxy_pwd, proxy_addr)})
+        else:
+            proxy = urllib2.ProxyHandler({'https' : 'http://%s' % (proxy_addr)})
+        opener = urllib2.build_opener(proxy)
+        return opener
+    except Exception as e:
+        print("FAILED TO CREATED OPENER")
+        print(e)
+        return None
+
+
+def getOpenerWithProxyFromString(proxy_str):
+    """
+        Return a Opener object based on a proxy string with format
+        http://[<user>]:[<password>]@<address>:<port>
+
+        This method was made especially for user from API
+    """
+    try:    
+        return urllib2.build_opener(proxy_str)
+    except Exception as e:
+        print("FAILED TO CREATED OPENER FROM STRING: %s" % proxy_str)
+        print(e)
+        return None
+
 
 def main():
     """
@@ -112,17 +154,19 @@ def main():
     args = parser.parse_args()
 
     # Parse Proxy Options
-    global proxy_uri
-    global proxy_usr
-    global proxy_pwd
+    proxy = None
     if args.proxy_uri:
+        proxy_usr = None
+        proxy_pwd = None
         proxy_uri = args.proxy_uri
 
         if args.proxy_user:
             proxy_usr = args.proxy_user
 
         if args.proxy_password:
-            proxy_pwd = args.proxy_user
+            proxy_pwd = args.proxy_password
+
+        proxy = getOpenerWithProxy(proxy_uri, proxy_usr, proxy_pwd)
 
     # Control output instead of stdout
     global outfile
@@ -154,7 +198,7 @@ def main():
         return
 
     # Do all the magic now :)
-    results = getHuntingResult(urls)
+    results = getHuntingResult(urls, proxy)
     print results #DEBUG -- TODO improve
 
 # Call the main function of this script and trigger all the magic \o/
