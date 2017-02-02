@@ -28,6 +28,10 @@ gsbversion = "3.1"  # see https://developers.google.com/safe-browsing/lookup_gui
 gsburl = "https://sb-ssl.google.com/safebrowsing/api/lookup?client=%s&key=%s&appver=%s&pver=%s"
 directory = "./out"
 
+# Google Safe Browsing Code
+GSB_ALL_CLEAN = 204
+GSB_SOME_BAD = 200
+
 # Output information
 outfile = sys.stdout
 
@@ -47,9 +51,7 @@ def getHuntingResult(urls=[], proxy=None):
     # Create an OpenerDirector with support for Basic HTTP Authentication...
     if proxy is not None:
         urllib2.install_opener(proxy)
-
-    results = ""
-    lastcode = 204
+    lastcode = GSB_ALL_CLEAN
     iteration = 0
 
     for i in range(0, len(urls) / 500 + 1):
@@ -64,14 +66,13 @@ def getHuntingResult(urls=[], proxy=None):
             req = urllib2.Request(url, query)
             response = urllib2.urlopen(req)
             code = response.getcode()
-            results += response.read()
             response.close()
 
             # Handle results
-            if(code == 204):
+            if(code == GSB_ALL_CLEAN):
                 continue  #this is the default code
-            elif(code == 200):
-                lastcode = 200
+            elif(code == GSB_SOME_BAD):
+                lastcode = GSB_SOME_BAD
                 print "AT LEAST ONE of the queried URLs are matched in this subset.\nCurrent result:\n%s" % results
             else:
                 lastcode = code
@@ -82,13 +83,13 @@ def getHuntingResult(urls=[], proxy=None):
             return None
 
     # Handle final results
-    if(lastcode == 204):
+    if(lastcode == GSB_ALL_CLEAN):
         print "All URLs are clean"
-    elif(lastcode == 200):
+    elif(lastcode == GSB_SOME_BAD):
         print "AT LEAST ONE of the queried URLs are matched"
     else:
         print "At least one of the step failed with code: %s" % lastcode
-    return results
+    return lastcode
 
 
 def getOpenerWithProxy(proxy_addr, proxy_usr = None, proxy_pwd = None):
