@@ -121,8 +121,10 @@ def getOpenerWithProxyFromString(proxy_str):
 
         This method was made especially for user from API
     """
-    try:    
-        return urllib2.build_opener(proxy_str)
+    try: 
+        proxy = urllib2.ProxyHandler({'https' : proxy_str})
+        opener = urllib2.build_opener(proxy)
+        return opener
     except Exception as e:
         print("FAILED TO CREATED OPENER FROM STRING: %s" % proxy_str)
         print(e)
